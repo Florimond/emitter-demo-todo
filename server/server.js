@@ -3,14 +3,21 @@ var db = new sqlite3.Database("todos.db", sqlite3.OPEN_READWRITE | sqlite3.OPEN_
 
 db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='todos'", function(err, data)
 {
-    if (!data)
+    if (data)
+    {
+        startListening();
+    }
+    else
     {
         db.serialize(function()
         {
             db.run("CREATE TABLE todos (id INTEGER PRIMARY KEY AUTOINCREMENT, completed BOOLEAN DEFAULT 0, title TEXT, version INTEGER DEFAULT 0)");
             db.run("INSERT INTO todos (title) VALUES (\"Buy ketchup\")");
             db.run("INSERT INTO todos (title) VALUES (\"Pay internet bill\")");
-            db.run("INSERT INTO todos (title) VALUES (\"Anna's birthday present\")");
+            db.run("INSERT INTO todos (title) VALUES (\"Anna's birthday present\")", function()
+            {
+                startListening();
+            });
         });
     }
 });
@@ -19,13 +26,16 @@ var emitterKey = "9SN1Xg1DjvmeiSdpnS0WdKkrxlz0koBH";
 var channel = "todo";
 var emitter = require('emitter-io').connect();
 
-emitter.on('connect', function(){
-    console.log('emitter: connected');
-    emitter.subscribe({
-        key: emitterKey,
-        channel: channel + "/cmd",
-    });
-});
+function startListening()
+{
+    emitter.on('connect', function(){
+        console.log('emitter: connected');
+        emitter.subscribe({
+            key: emitterKey,
+            channel: channel + "/cmd",
+        });
+    });    
+}
 
 emitter.on('message', function(msg)
 {
