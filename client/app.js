@@ -190,6 +190,7 @@ function handleGetAll(msg)
 {
     app.$data.todos = msg.todos;
     delayedApply();
+    return true;
 }
 
 /*
@@ -198,6 +199,7 @@ function handleGetAll(msg)
 */
 function handleAdd(msg)
 {
+    console.log("add");
     // Let's check whether this todo was already deleted.
     if (isBuried(msg.todo.id)) return true;
         
@@ -217,26 +219,26 @@ function handleAdd(msg)
 /*
     Returns whether the command could be processed. This return value is useful to the delayedApply function.
     Remove the todo from the list and push the id into the cemetery array.
-    If the todo is not found, this may be because of a late "add" message. This delete command is therefore added
-    to the cmdToApply array to be applied later.
+    If the todo is not found, this may be because of a late "add" message.
 */
 function handleDelete(msg)
 {
     var cleanTodoList = [];
     var deletedIds = [];
+    
+    // Let's browse the list of todos...
     for (var i = 0; i < app.$data.todos.length; ++i)
     {
+        // Does the list of ids to delete contains the current todo's id?
         var indexFound = msg.ids.indexOf(app.$data.todos[i].id);
         if (indexFound == -1)
-            // This item is not to be deleted.
+            // No, then this item is not to be deleted.
             cleanTodoList.push(app.$data.todos[i]);
         else
         {
-            // This item is to be deleted.
+            // Yes, this item is to be deleted.
             var id = app.$data.todos[i].id;
-            // Let's delte it if it's not buried.
-            if (!isBuried(id))
-                deletedIds.push(id);
+            deletedIds.push(id);
         }
     }
 
@@ -244,11 +246,11 @@ function handleDelete(msg)
     if (deletedIds.length == msg.ids.length)
     {
         // merge cemetery with deleted
-        app.$data.cemetery.push(id);
-        
+        app.$data.cemetery.concat(deletedIds);
         app.$data.todos = cleanTodoList;
         return true;
     }
+    // If not, let's cancel everything.
     else
         return false;
 }
@@ -273,10 +275,9 @@ function handleComplete(msg)
         }
     }
     /* 
-        At this point, to todo item corresponding to the id passed in the message was found.
-        This could be a case of late 
+        At this point, the todo item corresponding to the id passed in the message was not found.
+        This could be a case of late "add" message.
     */
-    app.$data.cmdToApply.push(msg);
     return false;
 }
 
@@ -299,7 +300,10 @@ function handleEdit(msg)
             return true;
         }
     }
-    app.$data.cmdToApply.push(msg);
+    /* 
+        At this point, the todo item corresponding to the id passed in the message was not found.
+        This could be a case of late "add" message.
+    */
     return false;
 }
 
@@ -329,7 +333,10 @@ emitter.on('message', function(msg){
     if (app.$data.todos === undefined && msg.cmd != "getall")
         app.$data.cmdToApply.push(msg);
     else
-        handle[msg.cmd](msg);
+    {
+        if (!handle[msg.cmd](msg))
+            app.$data.cmdToApply.push(msg);
+    }
 });
 
 // mount
