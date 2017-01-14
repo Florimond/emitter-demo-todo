@@ -155,26 +155,36 @@ emitter.on('connect', function(){
     });
 });
 
-function handleGetAll(msg)
+function delayedApply()
 {
-    app.$data.todos = msg.todos;
+    var remainingCommandsToApply = [];
     for (var i = 0; i < app.$data.cmdToApply.length; ++i)
     {
         var msg = app.$data.cmdToApply[i];
-        handle[msg.cmd](msg);
+        var treated = handle[msg.cmd](msg);
+        if (!treated)
+            remainingCommandsToApply.push(msg);
     }
-    app.$data.cmdToApply = [];
+    app.$data.cmdToApply = remainingCommandsToApply;    
+}
+
+function handleGetAll(msg)
+{
+    app.$data.todos = msg.todos;
+    delayedApply();
 }
 
 function handleAdd(msg)
 {
-    if (app.$data.cemetery.indexOf(msg.todo.id) != -1) return;
+    if (app.$data.cemetery.indexOf(msg.todo.id) != -1) return true;
     for (var i = 0; i < app.$data.todos.length; ++i)
     {
         var todo = app.$data.todos[i];
-        if (todo.id == msg.todo.id) return;
+        if (todo.id == msg.todo.id) return true;
     }
     app.$data.todos.push(msg.todo);
+    delayedApply();
+    return true;
 }
 
 function handleDelete(msg)
@@ -188,6 +198,7 @@ function handleDelete(msg)
             app.$data.cemetery.push(app.$data.todos[i].id);
     }
     app.$data.todos = newList;
+    return true;
 }
 
 function handleComplete(msg)
@@ -200,9 +211,11 @@ function handleComplete(msg)
             if (todo.version >= msg) return;
             todo.completed = msg.todo.completed;
             todo.version = msg.todo.version;
-            return;
+            return true;
         }
-    }  
+    }
+    app.$data.cmdToApply.push(msg);
+    return false;
 }
 
 function handleEdit(msg)
@@ -212,12 +225,14 @@ function handleEdit(msg)
         var todo = app.$data.todos[i];
         if (todo.id == msg.todo.id)
         {
-            if (todo.version >= msg.todo.version) return;
+            if (todo.version >= msg.todo.version) return true;
             todo.title = msg.todo.title;
             todo.version = msg.todo.version;
-            return;
+            return true;
         }
     }
+    app.$data.cmdToApply.push(msg);
+    return false;
 }
 
 function handleError(msg)
