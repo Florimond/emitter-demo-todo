@@ -155,6 +155,18 @@ emitter.on('connect', function(){
     });
 });
 
+/*
+    Browse the cemetery and return whether the todo passed in the message was already buried.
+*/
+function isBuried(id)
+{
+    return app.$data.cemetery.indexOf(id) == -1 ? false : true;
+}
+
+/*
+    Browse the list of messages that couldn't be applied at the reception time
+    and see whether they can be applied now.
+*/
 function delayedApply()
 {
     var remainingCommandsToApply = [];
@@ -168,41 +180,87 @@ function delayedApply()
     app.$data.cmdToApply = remainingCommandsToApply;    
 }
 
+/*
+    The first thing a client does is sending a request for the full todo list to the server.
+    Meanwhile, the client may receive updates which cannot be applied just yet and are therefore,
+    stored in an array. That's why, once the full todo list is finally received, we make a call
+    to the delayedApply function. See above.
+*/
 function handleGetAll(msg)
 {
     app.$data.todos = msg.todos;
     delayedApply();
 }
 
+/*
+    Returns whether the command could be processed. This return value is useful to the delayedApply function.
+    The add command always succeeds.
+*/
 function handleAdd(msg)
 {
-    if (app.$data.cemetery.indexOf(msg.todo.id) != -1) return true;
+    // Let's check whether this todo was already deleted.
+    if (isBuried(msg.todo.id)) return true;
+        
+    // Let's check whether, for whatever reason, this todo already was inserted.
     for (var i = 0; i < app.$data.todos.length; ++i)
     {
         var todo = app.$data.todos[i];
         if (todo.id == msg.todo.id) return true;
     }
+    // Insert the todo...
     app.$data.todos.push(msg.todo);
+    // ...and apply the stored potential updates related to this todo. 
     delayedApply();
     return true;
 }
 
+/*
+    Returns whether the command could be processed. This return value is useful to the delayedApply function.
+    Remove the todo from the list and push the id into the cemetery array.
+    If the todo is not found, this may be because of a late "add" message. This delete command is therefore added
+    to the cmdToApply array to be applied later.
+*/
 function handleDelete(msg)
 {
-    var newList = [];
+    var cleanTodoList = [];
+    var deletedIds = [];
     for (var i = 0; i < app.$data.todos.length; ++i)
     {
-        if (msg.ids.indexOf(app.$data.todos[i].id) == -1)
-            newList.push(app.$data.todos[i]);
+        var indexFound = msg.ids.indexOf(app.$data.todos[i].id);
+        if (indexFound == -1)
+            // This item is not to be deleted.
+            cleanTodoList.push(app.$data.todos[i]);
         else
-            app.$data.cemetery.push(app.$data.todos[i].id);
+        {
+            // This item is to be deleted.
+            var id = app.$data.todos[i].id;
+            // Let's delte it if it's not buried.
+            if (!isBuried(id))
+                deletedIds.push(id);
+        }
     }
-    app.$data.todos = newList;
-    return true;
+
+    // If the command was fully processed.
+    if (deletedIds.length == msg.ids.length)
+    {
+        // merge cemetery with deleted
+        app.$data.cemetery.push(id);
+        
+        app.$data.todos = cleanTodoList;
+        return true;
+    }
+    else
+        return false;
 }
 
+/*
+    Returns whether the command could be processed. This return value is useful to the delayedApply function.
+*/
 function handleComplete(msg)
 {
+    // Let's check whether this todo was already deleted.
+    if (isBuried(msg.todo.id)) return true;
+    
     for (var i = 0; i < app.$data.todos.length; ++i)
     {
         var todo = app.$data.todos[i];
@@ -214,12 +272,22 @@ function handleComplete(msg)
             return true;
         }
     }
+    /* 
+        At this point, to todo item corresponding to the id passed in the message was found.
+        This could be a case of late 
+    */
     app.$data.cmdToApply.push(msg);
     return false;
 }
 
+/*
+    Returns whether the command could be processed. This return value is useful to the delayedApply function.
+*/
 function handleEdit(msg)
 {
+    // Let's check whether this todo was already deleted.
+    if (isBuried(msg.todo.id)) return true;
+
     for (var i = 0; i < app.$data.todos.length; ++i)
     {
         var todo = app.$data.todos[i];
@@ -235,9 +303,13 @@ function handleEdit(msg)
     return false;
 }
 
+/*
+    Returns whether the command could be processed. This return value is useful to the delayedApply function.
+*/
 function handleError(msg)
 {
     console.error(msg);
+    return true;
 }
 
 var handle = {
@@ -253,6 +325,7 @@ emitter.on('message', function(msg){
     console.log('emitter: received ' + msg.asString() );
     msg = msg.asObject();
     
+    // If this is the init phase, we need to stack any update received before the answer to the getall command.
     if (app.$data.todos === undefined && msg.cmd != "getall")
         app.$data.cmdToApply.push(msg);
     else
