@@ -219,7 +219,7 @@ function handleAdd(msg)
 /*
     Returns whether the command could be processed. This return value is useful to the delayedApply function.
     Remove the todo from the list and push the id into the cemetery array.
-    If the todo is not found, this may be because of a late "add" message.
+    If the todo is not found, this may be because of a late "add" message. Or because of an earlier delete.
 */
 function handleDelete(msg)
 {
@@ -241,7 +241,19 @@ function handleDelete(msg)
             deletedIds.push(id);
         }
     }
+    
+    // Add to the deletedIds the ones that were already buried (case of earlier delete).
+    for (var i = 0; i < msg.ids.length; ++i)
+    {
+        if (isBuried(msg.ids[i]))
+            deletedIds.push(msg.ids[i]);
+    }
 
+    /*
+        At this point if the number of deleted ids differs from the number of ids to delete in the request,
+        it can only stem from a case of late "add" request.
+    */
+    
     // If the command was fully processed.
     if (deletedIds.length == msg.ids.length)
     {
