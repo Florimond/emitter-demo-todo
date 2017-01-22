@@ -10,9 +10,7 @@ function publish(msg)
     });
 }
 
-var emitter = emitter.connect({
-    secure: true
-}); 
+var emitter = emitter.connect({ secure: true }, onConnect); 
 
 // visibility filters
 var filters = {
@@ -136,7 +134,11 @@ function onHashChange ()
 window.addEventListener('hashchange', onHashChange);
 onHashChange();
 
-emitter.on('connect', function(){
+//emitter.on('connect', function(){
+//);
+
+function onConnect()
+{
     console.log('emitter: connected');
     emitter.subscribe({
         key: emitterKey,
@@ -153,7 +155,7 @@ emitter.on('connect', function(){
         channel: channel + "/cmd",
         message: JSON.stringify({sender: getPersistentVisitorId(), cmd: "getall"})
     });
-});
+}
 
 /*
     Browse the cemetery and return whether the todo passed in the message was already buried.

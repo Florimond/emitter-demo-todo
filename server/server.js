@@ -24,26 +24,24 @@ db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='todos'", fun
 
 var emitterKey = "9SN1Xg1DjvmeiSdpnS0WdKkrxlz0koBH";
 var channel = "todo";
-var emitter = require('emitter-io').connect();
-
+var emitter = undefined;
 function startListening()
 {
-    emitter.on('connect', function(){
+    emitter = require('emitter-io').connect(null, function()
+    {
         console.log('emitter: connected');
         emitter.subscribe({
             key: emitterKey,
             channel: channel + "/cmd",
         });
-    });    
+        emitter.on('message', function(msg)
+        {
+            console.log('emitter: received ' + msg.asString());
+            msg = msg.asObject();
+            handle[msg.cmd](msg);
+        });         
+    });      
 }
-
-emitter.on('message', function(msg)
-{
-    console.log('emitter: received ' + msg.asString());
-    msg = msg.asObject();
-    handle[msg.cmd](msg);
-});   
-
 
 function publish(recipient, msg)
 {
